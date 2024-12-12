@@ -1,0 +1,44 @@
+version: '3'
+
+vars:
+  GIT_VERSION:
+    sh: git describe --abbrev=4 --dirty --always --tags
+  COMMIT_HASH:
+    sh: git rev-parse --short HEAD
+  COMMIT_TIME:
+    sh: git log -1 --format="%at" | xargs -I{} date -r {} "+%Y/%m/%d_%H:%M:%S"
+  VERSION: '{{.GIT_VERSION}}'
+  BIN_DIR: '{{env "GOPATH"}}/bin'
+  TMPDIR:
+    sh: dirname $(mktemp -u)
+  COVER_FILE: '{{.TMPDIR}}/music-library.out'
+  APP_NAME: 'music-library'
+
+tasks:
+  build:
+    desc: Build the project binary
+    cmds:
+      - go build -ldflags
+        "-X github.com/Azaliya1995/music_library/version.Version={{.VERSION}}
+        -X github.com/Azaliya1995/music_library/version.CommitHash={{.COMMIT_HASH}}
+        -X github.com/Azaliya1995/music_library/version.CommitTime={{.COMMIT_TIME}}"
+        -o ./bin/{{.APP_NAME}} github.com/Azaliya1995/music_library/cmd
+
+  test:
+    desc: Run unit (short) tests
+    cmds:
+      - go test -short -race ./... -coverprofile={{.COVER_FILE}}
+      - go tool cover -func={{.COVER_FILE}} | grep ^total
+
+  lint:
+    cmds:
+      - golangci-lint --version
+      - golangci-lint run --timeout 5m0s -v ./...
+
+  image:
+    cmds:
+      - docker build
+        --build-arg COMMIT_HASH={{.COMMIT_HASH}}
+        --build-arg COMMIT_TIME={{.COMMIT_TIME}}
+        --build-arg VERSION={{.GIT_VERSION}}
+        -t music_library:dev -f Dockerfile .
